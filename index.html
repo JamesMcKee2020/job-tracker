@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Job Tracker + EI Activity Log</title>
+<style>
+:root{--bg:#faf6ef;--card:#fff;--ink:#2b2622;--mute:#7a6f64;--line:#e6dccd;--acc:#b5532a;--ok:#2f7d4f;--warn:#c98a00;--bad:#b3261e}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 Georgia,"Iowan Old Style",serif}
+header{padding:18px 16px 8px;max-width:980px;margin:auto}h1{margin:0;font-size:26px}
+.sub{color:var(--mute);font:14px system-ui,sans-serif}
+main{max-width:980px;margin:auto;padding:0 16px 60px;font-family:system-ui,sans-serif}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;flex:1;min-width:120px}
+.stat b{display:block;font-size:24px;font-family:Georgia,serif}.stat span{font-size:13px;color:var(--mute)}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;align-items:center}
+button,select,input,textarea{font:inherit;font-size:15px}
+button{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;color:var(--ink)}
+button.p{background:var(--acc);color:#fff;border-color:var(--acc)}button.d{color:var(--bad)}
+.card{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0}
+.card.urgent{border-left-color:var(--bad);background:#fff4f2}.card.soon{border-left-color:var(--warn)}.card.past{border-left-color:#bbb}
+.card.closed{border-left-color:#bbb}.card.done{border-left-color:var(--ok)}
+.top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.t{font-weight:600;font-size:17px}.org{color:var(--mute)}
+.dl{font-weight:600}.urgent .dl{color:var(--bad)}.soon .dl{color:#8a5d00}
+.meta{font-size:14px;color:var(--mute);margin-top:4px}.notes{font-size:14px;margin-top:6px;white-space:pre-wrap}
+.tag{font-size:12px;padding:2px 8px;border-radius:99px;background:#eee;margin-left:6px}
+.row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center}
+dialog{border:1px solid var(--line);border-radius:12px;max-width:520px;width:94%;padding:16px}
+label{display:block;font-size:13px;color:var(--mute);margin-top:8px}
+dialog input,dialog select,dialog textarea{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px}
+a{color:var(--acc)}.sec{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin-top:20px}
+
+button,select,input{min-height:44px}button:focus-visible,a:focus-visible{outline:3px solid var(--acc);outline-offset:3px}
+input,select,textarea{max-width:100%;min-width:0}.top>div{min-width:0}.t,.org,.meta,.notes{overflow-wrap:anywhere}
+.tabs{display:flex;gap:8px;margin:16px 0}.tabs button[aria-selected="true"]{background:var(--acc);color:white}
+.notice{padding:12px;border:1px solid var(--line);border-radius:8px;background:white;font-size:14px;margin:12px 0}
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.filters label{flex:1;min-width:120px}.filters input,.filters select{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:white}
+#activityDialog{max-height:90vh;overflow:auto}#storageMessage{color:var(--bad)}
+@media(max-width:480px){.top{display:block}.top>div[style]{text-align:left!important;margin-top:6px}.stat{min-width:100px}.bar button{flex-grow:1}dialog{padding:14px}.row select{width:100%}}
+@media print{header .sub,.tabs,.bar,.filters,button,#storageMessage,.notice.migration{display:none!important}body{background:white}main{padding:0;max-width:none}.card{break-inside:avoid;opacity:1!important}a{color:inherit}#postings[hidden],#activities[hidden]{display:none!important}}
+</style></head><body>
+<header><h1>Job Tracker</h1><div class="sub">Postings and job-search evidence, together. Saved only in this browser, not synced. Export regularly to keep a backup.</div></header>
+<main>
+<p id="storageMessage" role="alert"></p>
+<div class="notice migration">Updated October 28, 2026. If you edited an older copy, <b>Export JSON there first</b>, then Import JSON here. Older posting-only backups are supported. Keep the old copy until your data is checked.</div>
+<div class="bar"><button onclick="expJSON()">Export full backup (JSON)</button><button onclick="document.getElementById('imp').click()">Import JSON</button><input type="file" id="imp" accept=".json" hidden onchange="impJSON(this)"></div>
+<div class="tabs" role="tablist" aria-label="Tracker sections"><button id="tab-postings" role="tab" aria-selected="true" onclick="showTab('postings')">Job postings</button><button id="tab-activities" role="tab" aria-selected="false" onclick="showTab('activities')">EI activity log</button></div>
+<section id="activities" hidden>
+<h2>EI activity log</h2>
+<div class="notice">Record what you actually did, on the date you did it. Keep detailed records for <b>six years</b>, with application confirmations and relevant emails. This log does not submit EI reports or decide eligibility. No past activities have been filled in for you.</div>
+<div class="bar"><button class="p" onclick="editActivity()">+ Log activity</button><button onclick="exportActivities()">Export log CSV</button><button onclick="window.print()">Print / save PDF</button></div>
+<div class="filters"><label>From date<input id="fromDate" type="date" onchange="renderActivities()"></label><label>To date<input id="toDate" type="date" onchange="renderActivities()"></label><label>Activity type<select id="typeFilter" onchange="renderActivities()"><option value="">All activities</option></select></label><button onclick="clearFilters()">Clear filters</button></div>
+<p class="sub" id="activityCount" aria-live="polite"></p><div id="activityList"></div>
+<div class="notice">Job-related networking counts when it can directly and reasonably help you find suitable work. Meetings that are only social are not job-search evidence. Keep evidence files separately; this log saves a reference, not an attachment. Do not enter your SIN, EI access code or account passwords.</div>
+<p class="sub">Official guidance: <a href="https://www.canada.ca/en/services/benefits/ei/suitable-employment.html" target="_blank" rel="noopener">Job-search activities and record details</a> · <a href="https://www.canada.ca/en/employment-social-development/programs/ei/ei-list/reports/rights-responsbilities.html" target="_blank" rel="noopener">Six-year record retention</a>. Checked October 28, 2026.</p>
+</section><section id="postings">
+<div class="stats" id="stats"></div>
+<div class="bar"><button class="p" onclick="edit()">+ Add posting</button><button class="p" onclick="edit(null,true)">+ Add by URL</button>
+<button onclick="expCSV()">Export postings CSV</button>
+<label style="margin:0"><input type="checkbox" id="hide" onchange="render()"> hide Passed/Declined</label></div>
+<div id="list"></div></section></main>
+<dialog id="dlg"><form method="dialog" onsubmit="return save()">
+<h3 id="dh" style="margin:0 0 4px">Posting</h3>
+<div id="quick" style="background:#faf6ef;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:6px">
+<div class="sub">Quick add: paste the URL below (it is saved and linked on the card). This app cannot read the page itself, so to fill the other fields, paste the posting text here and press Fill.</div>
+<label>Posting URL<input id="q_url" type="url" placeholder="https://..." oninput="document.getElementById('f_link').value=this.value;guessUrl()"></label>
+<label>Posting text (optional)<textarea id="q_txt" rows="4" placeholder="Paste the posting text"></textarea></label>
+<div class="row"><button type="button" onclick="fillText()">Fill from text</button><span class="sub" id="q_msg"></span></div></div>
+<label>Role title<input id="f_title" required></label>
+<label>Organization<input id="f_org"></label>
+<label>Link<input id="f_link" type="url"></label>
+<label>Location<input id="f_loc"></label>
+<label>Salary range<input id="f_sal"></label>
+<label>Deadline (date and time)<input id="f_dl" type="datetime-local"></label>
+<label>Deadline time zone<select id="f_tz"><option value="America/Edmonton">Edmonton</option><option value="Europe/London">UK</option><option value="America/Toronto">Eastern</option><option value="America/Vancouver">Pacific</option></select></label>
+<label>Status<select id="f_st"></select></label>
+<label>Notes<textarea id="f_notes" rows="3"></textarea></label>
+<div class="row"><button class="p" type="submit">Save</button><button type="button" onclick="dlg.close()">Cancel</button></div>
+</form></dialog>
+<dialog id="activityDialog"><form onsubmit="return saveActivity(event)">
+<h3 id="activityHeading">Log job-search activity</h3><p class="sub">Only record completed activity. Leave unknown details blank rather than guess.</p>
+<label>Date of activity<input id="a_date" type="date" required></label>
+<label>Activity type<select id="a_type" required></select></label>
+<label>Related posting (optional)<select id="a_posting" onchange="prefillActivity()"></select></label>
+<label>Employer, agency or contact name<input id="a_employer" placeholder="For example: employer or networking contact"></label>
+<label>Contact details<input id="a_contact" placeholder="Name, email, phone, website or address"></label>
+<label>Type of work / role sought<input id="a_role"></label>
+<label>What you did<textarea id="a_action" rows="3" required placeholder="Describe the application, preparation, meeting or search"></textarea></label>
+<label>Result / next step<textarea id="a_result" rows="2" placeholder="For example: sent, awaiting reply, interview arranged"></textarea></label>
+<label>Evidence reference (optional)<textarea id="a_evidence" rows="2" placeholder="Confirmation email subject/date, saved filename, or document link"></textarea></label>
+<div class="row"><button class="p" type="submit">Save activity</button><button type="button" onclick="document.getElementById('activityDialog').close()">Cancel</button></div>
+</form></dialog><script>
+const KEY='jobTrackerV2',ST=['Watching','Intend to apply','Drafting','Submitted','Passed','Declined'];
+const HOME='America/Edmonton';
+const seed=[];
+function uid(){return Math.random().toString(36).slice(2,10)}
+function storageRead(key,fallback){try{const v=localStorage.getItem(key);return v===null?fallback:JSON.parse(v)}catch(e){document.getElementById('storageMessage').textContent='Browser storage could not be read. Export a backup before closing; the older data has not been overwritten.';return fallback}}
+let data=storageRead(KEY,null); if(!Array.isArray(data))data=seed;
+const ACTKEY='jobTrackerActivitiesV1';let activities=storageRead(ACTKEY,[]);if(!Array.isArray(activities))activities=[];
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(data));return true}catch(e){document.getElementById('storageMessage').textContent='Changes could not be saved in this browser. Export a full JSON backup before closing.';return false}}
+function persistActivities(){try{localStorage.setItem(ACTKEY,JSON.stringify(activities));return true}catch(e){document.getElementById('storageMessage').textContent='Activities could not be saved in this browser. Export a full JSON backup before closing.';return false}}
+// wall time in tz -> epoch ms
+function toMs(s,tz){if(!s)return null;const [d,t]=s.split('T');const [y,m,da]=d.split('-').map(Number);const [h,mi]=(t||'23:59').split(':').map(Number);
+ let g=Date.UTC(y,m-1,da,h,mi);let r=g;for(let i=0;i<3;i++){const p=new Intl.DateTimeFormat('en-CA',{timeZone:tz,hourCycle:'h23',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).formatToParts(new Date(r)).reduce((a,x)=>(a[x.type]=x.value,a),{});
+ const w=Date.UTC(+p.year,p.month-1,+p.day,+p.hour,+p.minute);r+=g-w}return r}
+function fmt(ms){return new Intl.DateTimeFormat('en-CA',{timeZone:HOME,weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(ms))+' Edmonton'}
+function left(ms){const d=ms-Date.now();if(d<0)return 'deadline passed';const h=d/36e5;if(h<48)return Math.ceil(h)+' hours left';return Math.ceil(h/24)+' days left'}
+const esc=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function render(){
+ const now=Date.now(),hide=document.getElementById('hide').checked;
+ const rows=data.map(x=>({...x,ms:toMs(x.dl,x.tz||HOME)}));
+ const closed=x=>x.status==='Passed'||x.status==='Declined';
+ const fin=x=>closed(x)||x.status==='Submitted';
+ const live=rows.filter(x=>!fin(x)&&x.ms&&x.ms>now);
+ const wk=live.filter(x=>x.ms-now<7*864e5).length;
+ document.getElementById('stats').innerHTML=`<div class="stat"><b>${wk}</b><span>live deadlines this week</span></div><div class="stat"><b>${live.length}</b><span>open and upcoming</span></div><div class="stat"><b>${rows.filter(x=>x.status==='Submitted').length}</b><span>submitted</span></div><div class="stat"><b>${rows.filter(closed).length}</b><span>passed / declined</span></div>`;
+ rows.sort((a,b)=>(a.ms??9e15)-(b.ms??9e15));
+ const open=rows.filter(x=>!(fin(x)&&false));
+ let html='';
+ const act=rows.filter(x=>!closed(x)&&x.status!=='Submitted'),sub=rows.filter(x=>x.status==='Submitted'),cl=rows.filter(closed);
+ const card=x=>{let c='card';const d=x.ms?x.ms-now:null;
+  if(closed(x))c+=' closed';else if(x.status==='Submitted')c+=' done';else if(d!==null&&d<0)c+=' past';else if(d!==null&&d<3*864e5)c+=' urgent';else if(d!==null&&d<7*864e5)c+=' soon';
+  return `<div class="${c}"><div class="top"><div><span class="t">${esc(x.title)}</span><br><span class="org">${esc(x.org)}</span></div><div style="text-align:right"><span class="dl">${x.ms?fmt(x.ms):'No deadline'}</span><br><span class="sub">${x.ms&&!fin(x)?left(x.ms):''}</span></div></div>
+  <div class="meta">${[x.location,x.salary].filter(Boolean).map(esc).join(' | ')}${x.link&&/^https?:\/\//i.test(x.link)?` | <a href="${esc(x.link)}" target="_blank" rel="noopener">posting</a>`:''}</div>
+  ${x.notes?`<div class="notes">${esc(x.notes)}</div>`:''}
+  <div class="row"><select onchange="setSt('${x.id}',this.value)">${ST.map(s=>`<option${s===x.status?' selected':''}>${s}</option>`).join('')}</select><button onclick="edit('${x.id}')">Edit</button><button onclick="editActivity(null,'${x.id}')">Log activity</button><button class="d" onclick="del('${x.id}')">Delete</button></div></div>`};
+ html+='<div class="sec">Active</div>'+(act.map(card).join('')||'<div class="sub">Nothing active.</div>');
+ if(sub.length)html+='<div class="sec">Submitted</div>'+sub.map(card).join('');
+ if(cl.length&&!hide)html+='<div class="sec">Passed / declined</div>'+cl.map(card).join('');
+ document.getElementById('list').innerHTML=html}
+function setSt(id,s){data.find(x=>x.id===id).status=s;persist();render()}
+function del(id){if(confirm('Delete this posting?')){data=data.filter(x=>x.id!==id);persist();render()}}
+const dlg=document.getElementById('dlg');let cur=null;
+document.getElementById('f_st').innerHTML=ST.map(s=>`<option>${s}</option>`).join('');
+function edit(id,q){cur=id||null;document.getElementById('quick').style.display=(id&&!q)?'none':'block';document.getElementById('q_url').value='';document.getElementById('q_txt').value='';document.getElementById('q_msg').textContent='';const x=data.find(y=>y.id===id)||{status:'Watching',tz:HOME};
+ for(const [k,f] of [['title','title'],['org','org'],['link','link'],['loc','location'],['sal','salary'],['dl','dl'],['tz','tz'],['st','status'],['notes','notes']])document.getElementById('f_'+k).value=x[f]||'';
+ dlg.showModal();if(q)document.getElementById('q_url').focus()}
+const MON={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+function setF(k,v){const e=document.getElementById('f_'+k);if(v&&!e.value)e.value=v}
+function guessUrl(){const u=document.getElementById('q_url').value;try{const h=new URL(u).hostname.replace(/^www\./,'');
+ const m={'jobpostings.alberta.ca':'Government of Alberta','recruitment.edmonton.ca':'City of Edmonton','linkedin.com':'','nait.wd10.myworkdayjobs.com':'NAIT'};
+ if(m[h])setF('org',m[h]);const seg=decodeURIComponent(new URL(u).pathname).split('/').filter(x=>x&&!/^\d+$/.test(x)&&x!=='job');
+ const slug=seg.find(x=>/[A-Za-z]{3,}.*[-_]/.test(x));if(slug&&!/^(en-US|job)$/i.test(slug))setF('title',slug.replace(/[-_]+/g,' ').trim())}catch(e){}}
+function parseDate(t){let m=t.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2}),?\s+(20\d\d)/i);let y,mo,d;
+ if(m){mo=MON[m[1].toLowerCase()];d=+m[2];y=+m[3]}else if(m=t.match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?,?\s+(20\d\d)/i)){d=+m[1];mo=MON[m[2].toLowerCase()];y=+m[3]}else if(m=t.match(/(20\d\d)-(\d\d)-(\d\d)/)){y=+m[1];mo=m[2]-1;d=+m[3]}else return null;
+ return y+'-'+String(mo+1).padStart(2,'0')+'-'+String(d).padStart(2,'0')+'T23:59'}
+function setFF(k,v){if(v)document.getElementById('f_'+k).value=v}
+function fillText(){const t=document.getElementById('q_txt').value;if(!t.trim()){document.getElementById('q_msg').textContent='Nothing to parse.';return}
+ const lines=t.split(/\n/).map(x=>x.trim()).filter(Boolean);let got=[];
+ const lab=(re)=>{for(const l of lines){const m=l.match(re);if(m&&m[1].trim())return m[1].trim()}};
+ let title=lab(/^(?:job title|position title|title|position)\s*[:\-]\s*(.+)/i)||lines[0];if(title&&title.length<160){setFF('title',title);got.push('title')}
+ const org=lab(/^(?:company|organi[sz]ation|employer|ministry|department|hiring organi[sz]ation)\s*[:\-]\s*(.+)/i);if(org){setFF('org',org);got.push('org')}
+ const loc=lab(/^(?:location|work location|city|locations?)\s*[:\-]\s*(.+)/i);if(loc){setFF('loc',loc);got.push('location')}
+ const sm=t.match(/(?:\$|£|CAD\s?|GBP\s?)\s?[\d,]{4,}(?:\.\d\d)?\s*(?:-|–|to)\s*(?:\$|£|CAD\s?|GBP\s?)?\s?[\d,]{4,}(?:\.\d\d)?/i);if(sm){setFF('sal',sm[0]);got.push('salary')}
+ let dline=lines.find(l=>/clos(e|es|ing)|deadline|apply (by|before)|end date/i.test(l)&&parseDate(l));if(dline){const v=parseDate(dline);if(v){document.getElementById('f_dl').value=v;got.push('deadline (time set to 11:59pm, check it)')}}
+ if(/\b(UK|London|Cardiff|Edinburgh|Belfast|BST)\b/.test(t)&&!/Edmonton|Alberta/.test(t))document.getElementById('f_tz').value='Europe/London';
+ document.getElementById('q_msg').textContent=got.length?'Filled: '+got.join(', ')+'. Check before saving.':'Could not find fields; fill them in by hand.'}
+function save(){const g=k=>document.getElementById('f_'+k).value.trim();
+ const o={title:g('title'),org:g('org'),link:g('link')||document.getElementById('q_url').value.trim(),location:g('loc'),salary:g('sal'),dl:g('dl'),tz:g('tz'),status:g('st'),notes:document.getElementById('f_notes').value};
+ if(cur){Object.assign(data.find(x=>x.id===cur),o)}else data.push({id:uid(),...o});
+ persist();render();dlg.close();return false}
+function dl(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()}
+function expJSON(){dl('job-tracker-with-ei.json',JSON.stringify({format:'job-tracker',version:3,exportedAt:new Date().toISOString(),postings:data,activities},null,2),'application/json')}
+function expCSV(){const cols=['title','org','link','location','salary','dl','tz','status','notes'];
+ const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+ dl('job-tracker.csv',[cols.join(',')].concat(data.map(x=>cols.map(c=>q(x[c])).join(','))).join('\n'),'text/csv')}
+function validateRecords(rows,kind){if(!Array.isArray(rows))throw Error('Expected a list of '+kind);return rows.map(x=>{if(!x||typeof x!=='object'||Array.isArray(x))throw Error('Invalid record');const fields=kind==='postings'?['title','org','link','location','salary','dl','tz','status','notes']:['date','type','posting','employer','contact','role','action','result','evidence'];const out={id:uid()};if(typeof x.id==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(x.id))out.id=x.id;for(const k of fields){if(x[k]!==undefined&&typeof x[k]!=='string')throw Error('Invalid '+k);out[k]=x[k]||''}if(kind==='postings'&&!out.title)throw Error('Posting title missing');if(kind==='activities'&&(!/^\d{4}-\d{2}-\d{2}$/.test(out.date)||!out.action||!AT.includes(out.type)))throw Error('Invalid activity');if(kind==='postings'&&out.tz){try{new Intl.DateTimeFormat('en',{timeZone:out.tz})}catch{throw Error('Invalid timezone')}}if(out.link&&!/^https?:\/\//i.test(out.link))out.link='';return out})}
+function impJSON(i){const f=i.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t),legacy=Array.isArray(d);if(!legacy&&(d.format!=='job-tracker'||d.version!==3))throw Error('Unknown backup format');const postings=validateRecords(legacy?d:d.postings,'postings'), acts=legacy?null:validateRecords(d.activities,'activities');const message=legacy?'Replace postings with '+postings.length+' imported postings? Your EI activities will be kept.':'Replace ALL postings and EI activities with this backup ('+postings.length+' postings, '+acts.length+' activities)?';if(!confirm(message+' Export your current data first if you need a backup.'))return;data=postings;if(acts!==null)activities=acts;persist();persistActivities();render();renderActivities();alert('Import finished. Check your postings and EI log before removing the old copy.')}catch(e){alert('Could not import: '+e.message)}finally{i.value=''}}).catch(()=>alert('Could not read the file.'))}
+const AT=['Reviewing opportunities','CV / cover letter preparation','Job tools / agency registration','Workshop / job fair','Networking','Contacting employer','Application submitted','Interview','Skills evaluation'];
+for(const id of ['a_type','typeFilter'])document.getElementById(id).insertAdjacentHTML('beforeend',AT.map(t=>`<option>${esc(t)}</option>`).join(''));
+function showTab(id){for(const t of ['postings','activities']){document.getElementById(t).hidden=t!==id;document.getElementById('tab-'+t).setAttribute('aria-selected',String(t===id))}if(id==='activities')renderActivities()}
+let currentActivity=null;
+function localToday(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function editActivity(id,postingId){currentActivity=id||null;const x=activities.find(a=>a.id===id)||{date:localToday(),type:AT[0],posting:postingId||''};document.getElementById('activityHeading').textContent=id?'Edit activity':'Log job-search activity';document.getElementById('a_posting').innerHTML='<option value="">No linked posting</option>'+data.map(p=>`<option value="${esc(p.id)}">${esc(p.org)} - ${esc(p.title)}</option>`).join('');for(const k of ['date','type','posting','employer','contact','role','action','result','evidence'])document.getElementById('a_'+k).value=x[k]||'';if(postingId)prefillActivity();document.getElementById('activityDialog').showModal()}
+function prefillActivity(){const x=data.find(p=>p.id===document.getElementById('a_posting').value);if(!x)return;for(const [k,v]of [['employer',x.org],['role',x.title],['contact',x.link]]){const e=document.getElementById('a_'+k);if(!e.value)e.value=v||''}}
+function saveActivity(e){e.preventDefault();const x={id:currentActivity||uid()};for(const k of ['date','type','posting','employer','contact','role','action','result','evidence'])x[k]=document.getElementById('a_'+k).value.trim();if(!x.date||!x.action)return false;if(currentActivity)activities=activities.map(a=>a.id===currentActivity?x:a);else activities.push(x);persistActivities();renderActivities();document.getElementById('activityDialog').close();return false}
+function deleteActivity(id){if(confirm('Delete this activity? Keep a backup if it is part of your EI evidence.')){activities=activities.filter(x=>x.id!==id);persistActivities();renderActivities()}}
+function filteredActivities(){const f=document.getElementById('fromDate').value,t=document.getElementById('toDate').value,type=document.getElementById('typeFilter').value;return activities.filter(x=>(!f||x.date>=f)&&(!t||x.date<=t)&&(!type||x.type===type)).sort((a,b)=>b.date.localeCompare(a.date))}
+function clearFilters(){for(const id of ['fromDate','toDate','typeFilter'])document.getElementById(id).value='';renderActivities()}
+function renderActivities(){const rows=filteredActivities();document.getElementById('activityCount').textContent=rows.length+' of '+activities.length+' activities shown. CSV and print use these filters.';document.getElementById('activityList').innerHTML=rows.map(x=>`<article class="card"><div class="t">${esc(x.date)} · ${esc(x.type)}</div>${[['Employer / contact',x.employer],['Contact details',x.contact],['Work sought',x.role],['What I did',x.action],['Result / next step',x.result],['Evidence reference',x.evidence]].filter(([k,v])=>v).map(([k,v])=>`<div class="notes"><b>${k}:</b> ${esc(v)}</div>`).join('')}<div class="row"><button onclick="editActivity('${x.id}')">Edit</button><button class="d" onclick="deleteActivity('${x.id}')">Delete</button></div></article>`).join('')||'<div class="card">'+(activities.length?'No activities match these filters.':'No activities logged yet. Add your first completed job-search activity.')+'</div>'}
+function csvQuote(v){let t=String(v??'');if(/^[=+@\-\t\r]/.test(t))t="'"+t;return '"'+t.replace(/"/g,'""')+'"'}
+function exportActivities(){const cols=['date','type','employer','contact','role','action','result','evidence'];dl('ei-activity-log.csv','\uFEFF'+[cols.map(csvQuote).join(',')].concat(filteredActivities().map(x=>cols.map(c=>csvQuote(x[c])).join(','))).join('\r\n'),'text/csv;charset=utf-8')}
+render();setInterval(render,60000);
+</script></body></html>
