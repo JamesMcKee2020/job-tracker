@@ -40,7 +40,7 @@ input,select,textarea{max-width:100%;min-width:0}.top>div{min-width:0}.t,.org,.m
 <header><h1>Job Tracker</h1><div class="sub">Postings and job-search evidence, together. Saved only in this browser, not synced. Export regularly to keep a backup.</div></header>
 <main>
 <p id="storageMessage" role="alert"></p>
-<div class="notice migration">Updated October 28, 2026. If you edited an older copy, <b>Export JSON there first</b>, then Import JSON here. Older posting-only backups are supported. Keep the old copy until your data is checked.</div>
+<div class="notice migration">Updated November 12, 2026. Outcome status supported. If you edited an older copy, <b>Export JSON there first</b>, then Import JSON here. Older posting-only backups are supported. Keep the old copy until your data is checked.</div>
 <div class="bar"><button onclick="expJSON()">Export full backup (JSON)</button><button onclick="document.getElementById('imp').click()">Import JSON</button><input type="file" id="imp" accept=".json" hidden onchange="impJSON(this)"><button onclick="document.getElementById('impa').click()">Import additions (JSON)</button><input type="file" id="impa" accept=".json" hidden onchange="impAdditions(this)"></div>
 <div class="tabs" role="tablist" aria-label="Tracker sections"><button id="tab-postings" role="tab" aria-selected="true" onclick="showTab('postings')">Job postings</button><button id="tab-activities" role="tab" aria-selected="false" onclick="showTab('activities')">EI activity log</button></div>
 <section id="activities" hidden>
@@ -121,7 +121,7 @@ function render(){
   return `<div class="${c}"><div class="top"><div><span class="t">${esc(x.title)}</span><br><span class="org">${esc(x.org)}</span></div><div style="text-align:right"><span class="dl">${x.ms?fmt(x.ms):'No deadline'}</span><br><span class="sub">${x.ms&&!fin(x)?left(x.ms):''}</span></div></div>
   <div class="meta">${[x.location,x.salary].filter(Boolean).map(esc).join(' | ')}${x.link&&/^https?:\/\//i.test(x.link)?` | <a href="${esc(x.link)}" target="_blank" rel="noopener">posting</a>`:''}</div>
   ${x.notes?`<div class="notes">${esc(x.notes)}</div>`:''}
-  <div class="row"><select onchange="setSt('${x.id}',this.value)">${ST.map(s=>`<option${s===x.status?' selected':''}>${s}</option>`).join('')}</select><button onclick="edit('${x.id}')">Edit</button><button onclick="editActivity(null,'${x.id}')">Log activity</button><button class="d" onclick="del('${x.id}')">Delete</button></div></div>`};
+  <div class="row"><select onchange="setSt('${x.id}',this.value)">${ST.map(s=>`<option value="${esc(s)}"${s===x.status?' selected':''}>${s==='Not Selected'?'Submitted - not selected':esc(s)}</option>`).join('')}</select><button onclick="edit('${x.id}')">Edit</button><button onclick="editActivity(null,'${x.id}')">Log activity</button><button class="d" onclick="del('${x.id}')">Delete</button></div></div>`};
  html+='<div class="sec">Active</div>'+(act.map(card).join('')||'<div class="sub">Nothing active.</div>');
  if(sub.length)html+='<div class="sec">Submitted</div>'+sub.map(card).join('');
  if(cl.length&&!hide)html+='<div class="sec">Closed postings</div>'+cl.map(card).join('');
@@ -129,7 +129,7 @@ function render(){
 function setSt(id,s){data.find(x=>x.id===id).status=s;persist();render()}
 function del(id){if(confirm('Delete this posting?')){data=data.filter(x=>x.id!==id);persist();render()}}
 const dlg=document.getElementById('dlg');let cur=null;
-document.getElementById('f_st').innerHTML=ST.map(s=>`<option>${s}</option>`).join('');
+document.getElementById('f_st').innerHTML=ST.map(s=>`<option value="${esc(s)}">${s==='Not Selected'?'Submitted - not selected':esc(s)}</option>`).join('');
 function edit(id,q){cur=id||null;document.getElementById('quick').style.display=(id&&!q)?'none':'block';document.getElementById('q_url').value='';document.getElementById('q_txt').value='';document.getElementById('q_msg').textContent='';const x=data.find(y=>y.id===id)||{status:'Watching',tz:HOME};
  for(const [k,f] of [['title','title'],['org','org'],['link','link'],['loc','location'],['sal','salary'],['dl','dl'],['tz','tz'],['st','status'],['notes','notes']])document.getElementById('f_'+k).value=x[f]||'';
  dlg.showModal();if(q)document.getElementById('q_url').focus()}
