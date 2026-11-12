@@ -41,7 +41,7 @@ input,select,textarea{max-width:100%;min-width:0}.top>div{min-width:0}.t,.org,.m
 <main>
 <p id="storageMessage" role="alert"></p>
 <div class="notice migration">Updated October 28, 2026. If you edited an older copy, <b>Export JSON there first</b>, then Import JSON here. Older posting-only backups are supported. Keep the old copy until your data is checked.</div>
-<div class="bar"><button onclick="expJSON()">Export full backup (JSON)</button><button onclick="document.getElementById('imp').click()">Import JSON</button><input type="file" id="imp" accept=".json" hidden onchange="impJSON(this)"></div>
+<div class="bar"><button onclick="expJSON()">Export full backup (JSON)</button><button onclick="document.getElementById('imp').click()">Import JSON</button><input type="file" id="imp" accept=".json" hidden onchange="impJSON(this)"><button onclick="document.getElementById('impa').click()">Import additions (JSON)</button><input type="file" id="impa" accept=".json" hidden onchange="impAdditions(this)"></div>
 <div class="tabs" role="tablist" aria-label="Tracker sections"><button id="tab-postings" role="tab" aria-selected="true" onclick="showTab('postings')">Job postings</button><button id="tab-activities" role="tab" aria-selected="false" onclick="showTab('activities')">EI activity log</button></div>
 <section id="activities" hidden>
 <h2>EI activity log</h2>
@@ -164,6 +164,20 @@ function expCSV(){const cols=['title','org','link','location','salary','dl','tz'
  dl('job-tracker.csv',[cols.join(',')].concat(data.map(x=>cols.map(c=>q(x[c])).join(','))).join('\n'),'text/csv')}
 function validateRecords(rows,kind){if(!Array.isArray(rows))throw Error('Expected a list of '+kind);return rows.map(x=>{if(!x||typeof x!=='object'||Array.isArray(x))throw Error('Invalid record');const fields=kind==='postings'?['title','org','link','location','salary','dl','tz','status','notes']:['date','type','posting','employer','contact','role','action','result','evidence'];const out={id:uid()};if(typeof x.id==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(x.id))out.id=x.id;for(const k of fields){if(x[k]!==undefined&&typeof x[k]!=='string')throw Error('Invalid '+k);out[k]=x[k]||''}if(kind==='postings'&&!out.title)throw Error('Posting title missing');if(kind==='activities'&&(!/^\d{4}-\d{2}-\d{2}$/.test(out.date)||!out.action||!AT.includes(out.type)))throw Error('Invalid activity');if(kind==='postings'&&out.tz){try{new Intl.DateTimeFormat('en',{timeZone:out.tz})}catch{throw Error('Invalid timezone')}}if(out.link&&!/^https?:\/\//i.test(out.link))out.link='';return out})}
 function impJSON(i){const f=i.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t),legacy=Array.isArray(d);if(!legacy&&(d.format!=='job-tracker'||d.version!==3))throw Error('Unknown backup format');const postings=validateRecords(legacy?d:d.postings,'postings'), acts=legacy?null:validateRecords(d.activities,'activities');const message=legacy?'Replace postings with '+postings.length+' imported postings? Your EI activities will be kept.':'Replace ALL postings and EI activities with this backup ('+postings.length+' postings, '+acts.length+' activities)?';if(!confirm(message+' Export your current data first if you need a backup.'))return;data=postings;if(acts!==null)activities=acts;persist();persistActivities();render();renderActivities();alert('Import finished. Check your postings and EI log before removing the old copy.')}catch(e){alert('Could not import: '+e.message)}finally{i.value=''}}).catch(()=>alert('Could not read the file.'))}
+function plural(n,one,many){return n+' '+(n===1?one:(many||one+'s'))}
+function applyAdditions(d){
+  const posts=validateRecords(d.postings||[],'postings'),acts=validateRecords(d.activities||[],'activities');
+  const knownP=new Set(data.map(x=>x.id)),knownA=new Set(activities.map(x=>x.id));
+  const addP=posts.filter(x=>!knownP.has(x.id)),addA=acts.filter(x=>!knownA.has(x.id));
+  const dup=(posts.length-addP.length)+(acts.length-addA.length),dupNote=dup?' '+plural(dup,'duplicate')+' already here, skipped.':'';
+  if(!addP.length&&!addA.length){alert('Nothing new to add: every record in that file is already in this tracker.');return}
+  if(!confirm('Add '+plural(addP.length,'new posting')+' and '+plural(addA.length,'new EI activity','new EI activities')+'? Your existing entries are kept.'+dupNote))return;
+  data=data.concat(addP);activities=activities.concat(addA);
+  if(!persist()||!persistActivities())return;
+  render();renderActivities();
+  alert('Added '+plural(addP.length,'posting')+' and '+plural(addA.length,'EI activity','EI activities')+'.'+dupNote)
+}
+function impAdditions(i){const f=i.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!d||d.format!=='job-tracker-additions'||d.version!==1)throw Error('not an additions file (use Import JSON to restore a full backup)');applyAdditions(d)}catch(e){alert('Could not import additions: '+e.message)}finally{i.value=''}}).catch(()=>alert('Could not read the file.'))}
 const AT=['Reviewing opportunities','CV / cover letter preparation','Job tools / agency registration','Workshop / job fair','Networking','Contacting employer','Application submitted','Interview','Skills evaluation'];
 for(const id of ['a_type','typeFilter'])document.getElementById(id).insertAdjacentHTML('beforeend',AT.map(t=>`<option>${esc(t)}</option>`).join(''));
 function showTab(id){for(const t of ['postings','activities']){document.getElementById(t).hidden=t!==id;document.getElementById('tab-'+t).setAttribute('aria-selected',String(t===id))}if(id==='activities')renderActivities()}
