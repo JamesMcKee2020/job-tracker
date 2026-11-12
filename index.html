@@ -55,7 +55,7 @@ input,select,textarea{max-width:100%;min-width:0}.top>div{min-width:0}.t,.org,.m
 <div class="stats" id="stats"></div>
 <div class="bar"><button class="p" onclick="edit()">+ Add posting</button><button class="p" onclick="edit(null,true)">+ Add by URL</button>
 <button onclick="expCSV()">Export postings CSV</button>
-<label style="margin:0"><input type="checkbox" id="hide" onchange="render()"> hide Passed/Declined</label></div>
+<label style="margin:0"><input type="checkbox" id="hide" onchange="render()"> hide closed postings</label></div>
 <div id="list"></div></section></main>
 <dialog id="dlg"><form method="dialog" onsubmit="return save()">
 <h3 id="dh" style="margin:0 0 4px">Posting</h3>
@@ -88,7 +88,7 @@ input,select,textarea{max-width:100%;min-width:0}.top>div{min-width:0}.t,.org,.m
 <label>Evidence reference (optional)<textarea id="a_evidence" rows="2" placeholder="Confirmation email subject/date, saved filename, or document link"></textarea></label>
 <div class="row"><button class="p" type="submit">Save activity</button><button type="button" onclick="document.getElementById('activityDialog').close()">Cancel</button></div>
 </form></dialog><script>
-const KEY='jobTrackerV2',ST=['Watching','Intend to apply','Drafting','Submitted','Passed','Declined'];
+const KEY='jobTrackerV2',ST=['Watching','Intend to apply','Drafting','Submitted','Passed','Declined','Not Selected'];
 const HOME='America/Edmonton';
 const seed=[];
 function uid(){return Math.random().toString(36).slice(2,10)}
@@ -107,11 +107,11 @@ const esc=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 function render(){
  const now=Date.now(),hide=document.getElementById('hide').checked;
  const rows=data.map(x=>({...x,ms:toMs(x.dl,x.tz||HOME)}));
- const closed=x=>x.status==='Passed'||x.status==='Declined';
+ const closed=x=>x.status==='Passed'||x.status==='Declined'||x.status==='Not Selected';
  const fin=x=>closed(x)||x.status==='Submitted';
  const live=rows.filter(x=>!fin(x)&&x.ms&&x.ms>now);
  const wk=live.filter(x=>x.ms-now<7*864e5).length;
- document.getElementById('stats').innerHTML=`<div class="stat"><b>${wk}</b><span>live deadlines this week</span></div><div class="stat"><b>${live.length}</b><span>open and upcoming</span></div><div class="stat"><b>${rows.filter(x=>x.status==='Submitted').length}</b><span>submitted</span></div><div class="stat"><b>${rows.filter(closed).length}</b><span>passed / declined</span></div>`;
+ document.getElementById('stats').innerHTML=`<div class="stat"><b>${wk}</b><span>live deadlines this week</span></div><div class="stat"><b>${live.length}</b><span>open and upcoming</span></div><div class="stat"><b>${rows.filter(x=>x.status==='Submitted').length}</b><span>submitted</span></div><div class="stat"><b>${rows.filter(closed).length}</b><span>closed postings</span></div>`;
  rows.sort((a,b)=>(a.ms??9e15)-(b.ms??9e15));
  const open=rows.filter(x=>!(fin(x)&&false));
  let html='';
@@ -124,7 +124,7 @@ function render(){
   <div class="row"><select onchange="setSt('${x.id}',this.value)">${ST.map(s=>`<option${s===x.status?' selected':''}>${s}</option>`).join('')}</select><button onclick="edit('${x.id}')">Edit</button><button onclick="editActivity(null,'${x.id}')">Log activity</button><button class="d" onclick="del('${x.id}')">Delete</button></div></div>`};
  html+='<div class="sec">Active</div>'+(act.map(card).join('')||'<div class="sub">Nothing active.</div>');
  if(sub.length)html+='<div class="sec">Submitted</div>'+sub.map(card).join('');
- if(cl.length&&!hide)html+='<div class="sec">Passed / declined</div>'+cl.map(card).join('');
+ if(cl.length&&!hide)html+='<div class="sec">Closed postings</div>'+cl.map(card).join('');
  document.getElementById('list').innerHTML=html}
 function setSt(id,s){data.find(x=>x.id===id).status=s;persist();render()}
 function del(id){if(confirm('Delete this posting?')){data=data.filter(x=>x.id!==id);persist();render()}}
